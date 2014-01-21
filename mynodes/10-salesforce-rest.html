@@ -1,0 +1,240 @@
+<!--
+  Copyright 2013 IBM Corp.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<script type="text/x-red" data-template-name="salesforce-credentials">
+    <div class="form-row" id="node-config-salesforce-row"></div>
+    <input type="hidden" id="node-config-input-screen_name">
+</script>
+
+<script type="text/javascript">
+    var salesforceConfigNodeId = null;
+    var salesforceConfigNodeIntervalId = null;
+
+    function showSalesforceAuthStart() {
+        var pathname = document.location.pathname;
+        if (pathname.slice(-1) != "/") {
+            pathname += "/";
+        }
+        var callback = encodeURIComponent(location.protocol+"//"+location.hostname+":"+location.port+pathname+"salesforce/"+salesforceConfigNodeId+"/auth/callback");
+
+        $("#node-config-salesforce-row").html('Click <a id="node-config-salesforce-start" href="salesforce/'+salesforceConfigNodeId+'/auth?callback='+callback+'" target="_blank"><b>here</b></a> to authenticate with salesforce.');
+        $("#node-config-salesforce-start").click(function() {
+            salesforceConfigNodeIntervalId = window.setTimeout(pollSalesforceCredentials,2000);
+        });
+    }
+    function updateSalesforceScreenName(sn) {
+        $("#node-config-input-screen_name").val(sn);
+        $("#node-config-salesforce-row").html('<label><i class="icon-user"></i> salesforce ID</label><span class="input-xlarge uneditable-input">'+sn+'</span>');
+    }
+    function pollSalesforceCredentials(e) {
+        $.getJSON('salesforce/'+salesforceConfigNodeId,function(data) {
+            if (data.sn) {
+                updateSalesforceScreenName(data.sn);
+                salesforceConfigNodeIntervalId = null;
+            } else {
+                salesforceConfigNodeIntervalId = window.setTimeout(pollSalesforceCredentials,2000);
+            }
+        })
+    }
+    RED.nodes.registerType('salesforce-credentials',{
+        category: 'config',
+        defaults: {
+            screen_name: {value:""},
+            access_token: {value: ""},
+            access_token_secret: {value:""}
+        },
+        label: function() {
+            return this.screen_name;
+        },
+        exportable: false,
+        oneditprepare: function() {
+        
+            console.log ('salesforce-credentials: ' + this.id);
+            salesforceConfigNodeId = this.id;
+            
+            if (!this.screen_name || this.screen_name == "") {
+                showSalesforceAuthStart();
+            } else {
+                $.getJSON('salesforce/'+salesforceConfigNodeId,function(data) {
+                    if (data.sn) {
+                        updateSalesforceScreenName(data.sn);
+                    } else {
+                        showsalesforceAuthStart();
+                    }
+                });
+            }
+        },
+        oneditsave: function() {
+            if (salesforceConfigNodeIntervalId) {
+                window.clearTimeout(salesforceConfigNodeIntervalId);
+            }
+        },
+        oneditcancel: function(adding) {
+            if (salesforceConfigNodeIntervalId) {
+                window.clearTimeout(salesforceConfigNodeIntervalId);
+            }
+            if (adding) {
+                $.ajax({
+                    url: 'salesforce/'+this.id,
+                    type: 'DELETE',
+                    success: function(result) {}
+                });
+            }
+        },
+        ondelete: function() {
+            $.ajax({
+                url: 'salesforce/'+this.id,
+                type: 'DELETE',
+                success: function(result) {}
+            });
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="salesforce in">
+    <div class="form-row">
+        <label for="node-input-salesforce"><i class="icon-user"></i> Log in as</label>
+        <input type="text" id="node-input-salesforce">
+    </div>
+    <div class="form-row">
+        <label for="node-input-importtype"><i class="icon-search"></i> Search</label>
+        <select type="text" id="node-input-importtype" style="display: inline-block; vertical-align: middle; width:60%;">
+			<option value="soql">Enter the SOQL Query</option>            
+			<option value="sobjects">all Records of a Oject</option>
+            <option value="stream">Subscribe to Streaming API</option>
+            <option value="outmessage">Listen for Outbound Message</option>
+        </select>
+    </div>
+
+	<div class="form-row" id="node-input-sobjects-row" style="display: none;">
+        <label for="node-input-sobjects"><i class="icon-search"></i> SObjects</label>
+        <select type="text" id="node-input-sobject" style="display: inline-block; vertical-align: middle; width:60%;">
+        </select>
+    </div>
+
+    <div class="form-row" id="node-input-tags-row">
+        <label for="node-input-tags"><i class="icon-tags"></i> <span id="node-input-tags-label">for</span></label>
+        <input type="text" id="node-input-tags" placeholder="comma-separated words, @ids, #tags">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-tips">Tip: Use commas without spaces between multiple search terms. Comma = OR, Space = AND.
+    <br/>The salesforce API WILL NOT deliver 100% of all tweets.
+    <br/>Tweets of who you follow will include their retweets and favourites.</div>
+</script>
+
+<script type="text/x-red" data-help-name="salesforce in">
+    <p>salesforce input node. Can be used to search either:
+    <ul><li>the public or a user's stream for tweets containing the configured search term</li>
+        <li>all tweets by specific users</li>
+        <li>direct messages received by the authenticated user</li>
+    </ul></p>
+    <p>Use space for <i>and</i> and comma , for <i>or</i> when searching for multiple terms.</p>
+    <p>Sets the <b>msg.topic</b> to <i>tweets/</i> and then appends the senders screen name.</p>
+    <p>Sets <b>msg.location</b> to the tweeters location if known.</p>
+    <p>Sets <b>msg.tweet</b> to the full tweet object as documented by <a href="https://dev.salesforce.com/docs/platform-objects/tweets">salesforce</a>.
+    <p><b>Note:</b> when set to a specific user's tweets, or your direct messages, the node is subject to
+      salesforce's API rate limiting. If you deploy the flows multiple times within a 15 minute window, you may
+      exceed the limit and will see errors from the node. These errors will clear when the current 15 minute window
+      passes.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('salesforce in',{
+        category: 'input',
+        color:"#C0DEED",
+        defaults: {
+            salesforce: {type:"salesforce-credentials",required:true},
+            importtype: {value:"",required:true},
+            sobject: {value:""},
+            name: {value:""},
+            topic: {value:"sfdc"}
+        },
+        inputs:0,
+        outputs:1,
+        icon: "salesforce.png",
+        label: function() {
+            return "salesforce";
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function() {
+        	var myNode = this;
+            $("node-input-sobjects-row").hide();
+            
+            $("#node-input-importtype").change(function() {
+                var type = $("#node-input-importtype option:selected").val();
+                console.log('myNode ' + myNode.id  + ' : ' + myNode.salesforce);
+
+                if (type == "sobjects") {
+                    $("#node-input-sobjects-row").show();
+                    $("#node-input-sobject").attr("placeholder","loading...");
+                     $.getJSON('salesforce/'+myNode.salesforce+'/'+type,function(data) {
+				            if (data) {
+				                for (sobj in data.sobjects) {
+				                	$('#node-input-sobject')
+							          .append($('<option>', { value : data.sobjects[sobj].name })
+							          .text(data.sobjects[sobj].label)); 
+				                }
+				            }
+				        })
+                } else {
+                    $("node-input-sobjects-row").hide();
+                }             
+
+            });
+            $("#node-input-importtype").change();
+        
+        }
+    });
+</script>
+
+
+<script type="text/x-red" data-template-name="salesforce out">
+    <div class="form-row">
+        <label for="node-input-salesforce"><i class="icon-user"></i> salesforce</label>
+        <input type="text" id="node-input-salesforce">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="salesforce out">
+    <p>salesforce out node. Tweets the <b>msg.payload</b>.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('salesforce out',{
+        category: 'social-output',
+        color:"#C0DEED",
+        defaults: {
+            salesforce: {type:"salesforce-credentials",required:true},
+            name: {value:"Tweet"}
+        },
+        inputs:1,
+        outputs:0,
+        icon: "salesforce.png",
+        align: "right",
+        label: function() {
+            return this.name;
+        }
+    });
+</script>
