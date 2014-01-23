@@ -16,65 +16,122 @@ function SalesforceNode(n) {
 }
 RED.nodes.registerType("salesforce-credentials",SalesforceNode);
 
-
+/* Run when the node is deplyed */
 function SalesforceGetNode(n) {
-    RED.nodes.createNode(this,n);
-    this.active = true;
-    
-    this.importtype = n.importtype;
-    this.sobject = n.sobject;
-    this.salesforce = n.salesforce;
-    
-    this.topic = n.topic||"sfdc";
-    this.salesforceConfig = RED.nodes.getNode(this.salesforce);
-    var credentials = RED.nodes.getCredentials(this.salesforce);
-    if (credentials && credentials.screen_name == this.salesforceConfig.screen_name) {
+	var node = this;
 
-    	var node = this;		
+	RED.nodes.createNode(node,n);
+
+	node.importtype = n.importtype;
+	node.sobject = n.sobject;
+	node.sobject_fields = n.sobject_fields;
+	node.salesforce = n.salesforce;
+	node.interval = n.interval;
+	node.topic = n.topic||"sfdc";
+	
+	node.log ('calling SalesforceGetNode() : ' + node.importtype + ' : ' + node.sobject + ' : ' + node.interval);
+	
+	node.salesforceConfig = RED.nodes.getNode(node.salesforce); // the 'salesforce-credentials' node
+    
+    var credentials = RED.nodes.getCredentials(node.salesforce);
+    node.log ('credentials:' + JSON.stringify(credentials) + ', "salesforce-credentials".screen_name: '+ node.salesforceConfig.screen_name);
+    
+    if (credentials && credentials.screen_name == node.salesforceConfig.screen_name) {
+
+
 		node.poll_ids = [];
-	    
 		
-	    node.poll_ids.push(setInterval(function() {
-	    	
-	    	/* get the username */ 
-	        var getres = '', getopts = {
-	            	hostname: url.parse(credentials.instance_url).hostname,
-	                path: '/services/data/v28.0/query/?q=SELECT+Name+FROM+Account',
-	                headers:{
-	                	'Authorization': 'Bearer '+ credentials.access_token
-	                }};
-	      
-	        https.get (getopts, function (res_data) {
-	        	res_data.setEncoding('utf8');
-	        	res_data.on('data', function (chunk) { getres += chunk; });
-	        	res_data.on('end', function () {
-	        		
-	        		console.log("Got response: " + res_data.statusCode);
-					  var msg = { 
-							  topic:node.topic+"/"+credentials.screen_name, 
-							  payload:getres, 
-							  other: "other" };
-					  
-	                  node.send(msg);
-	          	});
-	        }).on('error', function(e) {
-	        	console.log("Got error: " + e.message);
-	        	res.send("yeah something broke.");
-	        });
-	    	
-
-		}, 6000));
-
+		node.deactivate = function() {
+			node.log ('deactivate salesforce-in');
+			node.active = false;
+			
+			if (node.poll_ids) {
+	            for (var i=0;i<node.poll_ids.length;i++) {
+	                clearInterval(node.poll_ids[i]);
+	            }
+	        }
+		}
+		
+		node.activate = function() {
+			node.log ('activating salesforce-in');
+			node.active = true;
+		    node.poll_ids.push(setInterval(function() {
+		    	
+		    	/* get the username */ 
+		        var getopts = {
+		            	hostname: url.parse(credentials.instance_url).hostname,
+		                path: '/services/data/v28.0/query/?q='+encodeURIComponent('SELECT '+node.sobject_fields+' FROM '+node.sobject),
+		                headers:{
+		                	'Authorization': 'Bearer '+ credentials.access_token
+		                }};
+	
+			    var runextract = function() {
+			    	var getres = ''
+			    	https.get (getopts, function (res_data) {
+			        	res_data.setEncoding('utf8');
+			        	res_data.on('data', function (chunk) { getres += chunk; });
+			        	res_data.on('end', function () {
+			        		
+			        		console.log("Got response: " + res_data.statusCode);
+							
+			        		if (res_data.statusCode == 401) {
+			        			node.warn ( 'Unauthorized, do a refresh cycle');
+			        		    if (credentials.refresh_token != null) {
+				        			oa.getOAuthAccessToken(
+			        		    		credentials.refresh_token,
+			        		        	{ grant_type: 'refresh_token',   redirect_uri: redirectUrl, format: 'json'},
+			        		            function(error, oauth_access_token, oauth_refresh_token, results){
+			        		                if (error){
+			        		                	node.deactivate();
+			        		                    node.error("Error with Oauth refresh cycle " + JSON.stringify(error));
+			        		                } else {
+			        		                	node.log('updating access_token from refresh process ' + JSON.stringify(results));
+			        		                    credentials.access_token = oauth_access_token;
+			        		                    RED.nodes.deleteCredentials(this.salesforce);
+			        		                    RED.nodes.addCredentials(this.salesforce,credentials);
+			        		                    runextract();
+			        		                }
+			        		        	});
+			        			} else {
+			        				node.deactivate();
+			        				node.error("No refresh Token, ensure your connected app is setup to allow refresh scope & only login on first use");
+			        				
+			        			}
+			        		} else if (res_data.statusCode == 200) {
+				        		var msg = { 
+									 topic:node.topic+"/"+credentials.screen_name, 
+									 payload:getres, 
+									 other: "other" };
+								  
+				                  node.send(msg);
+			        		} else {
+			        			node.deactivate();
+			        			console.log(res_data.statusCode);
+			        			node.error("yeah something broke." + res_data.statusCode);
+			        		}
+			          	});
+			        }).on('error', function(e) {
+			        	console.log("Got error: " + e.message);
+			        	node.deactivate();
+			        	res.send("yeah something broke.");
+			        });
+			    };
+			    
+			    runextract();
+			    
+	
+			}, (node.interval * 1000)));
+		}
+		if (n.active) node.activate();
         
     } else {
-        this.error("missing salesforce credentials");
+    	node.error("missing salesforce credentials");
     }
 
-    this.on('close', function() {
-       
-        if (this.poll_ids) {
-            for (var i=0;i<this.poll_ids.length;i++) {
-                clearInterval(this.poll_ids[i]);
+    node.on('close', function() {
+        if (node.poll_ids) {
+            for (var i=0;i<node.poll_ids.length;i++) {
+                clearInterval(node.poll_ids[i]);
             }
         }
     });
@@ -113,14 +170,17 @@ RED.app.delete('/salesforce/:id', function(req,res) {
     res.send(200);
 });
 
-RED.app.get('/salesforce/:id/sobjects', function(req,res) {
-	console.log ('get sobjects for node ' + req.params.id);
-	var credentials = RED.nodes.getCredentials(req.params.id);
+RED.app.get('/salesforce/:id/sobjects/:mode', function(req,res) {
+	var nodeid = req.params.id,
+		mode = (req.params.mode == 'all') ? '' : ('/'+req.params.mode+'/describe');
+	
+	console.log ('get sobjects for node ' + nodeid + ', mode : ' + mode);
+	var credentials = RED.nodes.getCredentials(nodeid);
     
     /* get the username */ 
     var getres = '', getopts = {
         	hostname: url.parse(credentials.instance_url).hostname,
-            path: '/services/data/v26.0/sobjects',
+            path: '/services/data/v26.0/sobjects' + mode,
             headers:{
             	'Authorization': 'Bearer '+ credentials.access_token
             }};
@@ -137,6 +197,23 @@ RED.app.get('/salesforce/:id/sobjects', function(req,res) {
     });
 });
 
+RED.app.post("/salesforce/:id/activate/:state", function(req,res) {
+	var node = RED.nodes.getNode(req.params.id);
+	var state = req.params.state;
+	if (node != null) {
+	    if (state === "enable") {
+	        node.activate();
+			res.send(200);
+	    } else if (state === "disable") {
+	        node.deactivate();
+			res.send(201);
+	    } else {
+	        res.send(404);
+	    }
+	} else {
+		res.send(404);
+	}
+});
 
 RED.app.get('/salesforce/:id/auth', function(req, res){
 	res.redirect(oa.getAuthorizeUrl({ 
@@ -155,16 +232,16 @@ RED.app.get('/salesforce/auth/callback', function(req, res, next){
     oa.getOAuthAccessToken(
     	req.param('code'),
     	{ grant_type: 'authorization_code',   redirect_uri: redirectUrl, format: 'json'},
-        function(error, oauth_access_token, oauth_access_token_secret, results){
+        function(error, oauth_access_token, oauth_refresh_token, results){
             if (error){
-                console.log(error);
+                console.log("Got error: " + error);
                 res.send("yeah something broke.");
             } else {
-            	console.log(results);
+            	console.log('request authorisation_code, got at: ' + oauth_access_token + ', rt: ' + oauth_refresh_token + ', rest: ' + JSON.stringify(results));
 
                 credentials = {};
                 credentials.access_token = oauth_access_token;
-                credentials.access_token_secret = oauth_access_token_secret;
+                credentials.refresh_token = oauth_refresh_token;
                 credentials.identity_url = url.parse(results.id);
                 credentials.instance_url = results.instance_url;
                 
