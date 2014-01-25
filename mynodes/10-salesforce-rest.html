@@ -316,6 +316,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
                 } else if (type == "StreamingAPI") {
             		$("#node-input-push_topic-row").show();
                     $("#node-input-push_topic-spinner").show();
+                    $("#node-input-push_topic").find('option').remove().end();
                     
                 	   $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/StreamingAPI',function(data) {
 				            if (data) {

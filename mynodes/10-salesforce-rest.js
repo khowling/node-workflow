@@ -4,7 +4,8 @@
 var RED = require(process.env.NODE_RED_HOME+"/red/red");
 var https = require("https"),
     OAuth= require('oauth'),
-    url = require('url');
+    url = require('url'),
+    Faye = require('faye');
 
 
 
@@ -57,16 +58,15 @@ function SalesforceGetNode(n) {
 			
 			var runNode = function() {
 		    	
-		    	var query = '';
-		    	if (node.importtype == 'soql') {
-		    		query = node.soql;
-		    	} else if (node.importtype == 'sobjects') {
-		    		query = 'SELECT '+node.sobject_fields+' FROM '+node.sobject;
-		    	} else {
-    				node.deactivate();
-    				node.error("No Query Specified");
-		    	}
 		    	var runextract = function() { 
+		    		
+			    	var query = '';
+			    	if (node.importtype == 'soql') {
+			    		query = node.soql;
+			    	} else if (node.importtype == 'sobjects') {
+			    		query = 'SELECT '+node.sobject_fields+' FROM '+node.sobject;
+			    	}
+			    	
 			        var getopts = {
 			            	hostname: url.parse(credentials.instance_url).hostname,
 			                path: '/services/data/v28.0/query/?q='+encodeURIComponent(query),
@@ -89,31 +89,7 @@ function SalesforceGetNode(n) {
 			        				node.error(msg);
 
 			        			})
-			        			/*
-			        			node.warn ( 'Unauthorized, do a refresh cycle');
-			        		    if (credentials.refresh_token != null) {
-				        			oa.getOAuthAccessToken(
-			        		    		credentials.refresh_token,
-			        		        	{ grant_type: 'refresh_token',   redirect_uri: redirectUrl, format: 'json'},
-			        		            function(error, oauth_access_token, oauth_refresh_token, results){
-			        		                if (error){
-			        		                	node.deactivate();
-			        		                    node.error("Error with Oauth refresh cycle " + JSON.stringify(error));
-			        		                } else {
-			        		                	node.log('updating access_token from refresh process ' + oauth_access_token);
-			        		                    credentials.access_token = oauth_access_token;
-			        		                    RED.nodes.deleteCredentials(this.salesforce);
-			        		                    RED.nodes.addCredentials(this.salesforce,credentials);
-			        		                    runextract();
-			        		                }
-			        		        	});
-			        			} else {
-			        				node.deactivate();
-			        				node.error("No refresh Token, ensure your connected app is setup to allow refresh scope & only login on first use");
-			        				
-			        			}
-			        		    */
-			        		    
+
 			        		} else if (res_data.statusCode == 200) {
 				        		var msg = { 
 									 topic:node.importtype+"/"+credentials.screen_name, 
@@ -131,11 +107,36 @@ function SalesforceGetNode(n) {
 			        	node.error("Got REST API error: " + e.message);
 			        });
 			    };
-			    runextract();
+			    
+
+		    	if (node.importtype == 'StreamingAPI'){
+		    		/* source : https://github.com/faye/faye/blob/master/javascript/protocol/client.js */
+		    		if (!node._fayeClient) {
+		    		    Faye.Transport.NodeHttp.prototype.batching = false; // prevent streaming API server error
+		    		    Faye.Logging.LOG_LEVELS = 0;
+		    		    node._fayeClient = new Faye.Client(credentials.instance_url + '/cometd/29.0', {});
+		    		    node._fayeClient.setHeader('Authorization', 'Bearer '+ credentials.access_token);
+		    		}
+	    		    node.log ('subscript Faye Client : ' + "/topic/"+node.push_topic);
+		    		node._fayeClient.subscribe("/topic/"+node.push_topic, function (message) {
+		    			node.log ('Got message : ' + message);
+		    			var msg = { 
+							 topic:node.importtype+"/"+credentials.screen_name, 
+							 payload:message, 
+							 other: "other" };
+						  
+		                  node.send(msg);
+		    		});  
+		    	} else {
+		    		runextract();
+		    	} 
 
 			};
+			runNode();
 			
-			node.poll_ids.push(setInterval(runNode, (node.interval * 1000)));
+			if (node.interval > 0 && node.importtype != 'StreamingAPI') {
+				node.poll_ids.push(setInterval(runNode, (node.interval * 1000)));
+			}
 		}
 		if (n.active) node.activate();
         
