@@ -1,8 +1,6 @@
 /**
  * 
  */
-
-
 var RED = require(process.env.NODE_RED_HOME+"/red/red");
 var https = require("https"),
     OAuth= require('oauth'),
@@ -25,9 +23,10 @@ function SalesforceGetNode(n) {
 	node.importtype = n.importtype;
 	node.sobject = n.sobject;
 	node.sobject_fields = n.sobject_fields;
+	node.soql = n.soql;
 	node.salesforce = n.salesforce;
 	node.interval = n.interval;
-	node.topic = n.topic||"sfdc";
+	node.push_topic = n.push_topic;
 	
 	node.log ('calling SalesforceGetNode() : ' + node.importtype + ' : ' + node.sobject + ' : ' + node.interval);
 	
@@ -55,26 +54,42 @@ function SalesforceGetNode(n) {
 		node.activate = function() {
 			node.log ('activating salesforce-in');
 			node.active = true;
-		    node.poll_ids.push(setInterval(function() {
+			
+			var runNode = function() {
 		    	
-		    	/* get the username */ 
-		        var getopts = {
-		            	hostname: url.parse(credentials.instance_url).hostname,
-		                path: '/services/data/v28.0/query/?q='+encodeURIComponent('SELECT '+node.sobject_fields+' FROM '+node.sobject),
-		                headers:{
-		                	'Authorization': 'Bearer '+ credentials.access_token
-		                }};
-	
-			    var runextract = function() {
+		    	var query = '';
+		    	if (node.importtype == 'soql') {
+		    		query = node.soql;
+		    	} else if (node.importtype == 'sobjects') {
+		    		query = 'SELECT '+node.sobject_fields+' FROM '+node.sobject;
+		    	} else {
+    				node.deactivate();
+    				node.error("No Query Specified");
+		    	}
+		    	var runextract = function() { 
+			        var getopts = {
+			            	hostname: url.parse(credentials.instance_url).hostname,
+			                path: '/services/data/v28.0/query/?q='+encodeURIComponent(query),
+			                headers:{
+			                	'Authorization': 'Bearer '+ credentials.access_token
+			                }};
+
 			    	var getres = ''
 			    	https.get (getopts, function (res_data) {
 			        	res_data.setEncoding('utf8');
 			        	res_data.on('data', function (chunk) { getres += chunk; });
 			        	res_data.on('end', function () {
-			        		
-			        		console.log("Got response: " + res_data.statusCode);
-							
 			        		if (res_data.statusCode == 401) {
+			        			
+			        			node.warn ( 'Unauthorized, do a refresh cycle');
+			        			oAuthRefresh(this.salesforce, function() {
+			        				runextract();
+			        			}, function(msg) {
+			        				node.deactivate();
+			        				node.error(msg);
+
+			        			})
+			        			/*
 			        			node.warn ( 'Unauthorized, do a refresh cycle');
 			        		    if (credentials.refresh_token != null) {
 				        			oa.getOAuthAccessToken(
@@ -85,7 +100,7 @@ function SalesforceGetNode(n) {
 			        		                	node.deactivate();
 			        		                    node.error("Error with Oauth refresh cycle " + JSON.stringify(error));
 			        		                } else {
-			        		                	node.log('updating access_token from refresh process ' + JSON.stringify(results));
+			        		                	node.log('updating access_token from refresh process ' + oauth_access_token);
 			        		                    credentials.access_token = oauth_access_token;
 			        		                    RED.nodes.deleteCredentials(this.salesforce);
 			        		                    RED.nodes.addCredentials(this.salesforce,credentials);
@@ -97,30 +112,30 @@ function SalesforceGetNode(n) {
 			        				node.error("No refresh Token, ensure your connected app is setup to allow refresh scope & only login on first use");
 			        				
 			        			}
+			        		    */
+			        		    
 			        		} else if (res_data.statusCode == 200) {
 				        		var msg = { 
-									 topic:node.topic+"/"+credentials.screen_name, 
+									 topic:node.importtype+"/"+credentials.screen_name, 
 									 payload:getres, 
 									 other: "other" };
 								  
 				                  node.send(msg);
 			        		} else {
 			        			node.deactivate();
-			        			console.log(res_data.statusCode);
 			        			node.error("yeah something broke." + res_data.statusCode);
 			        		}
 			          	});
 			        }).on('error', function(e) {
-			        	console.log("Got error: " + e.message);
 			        	node.deactivate();
-			        	res.send("yeah something broke.");
+			        	node.error("Got REST API error: " + e.message);
 			        });
 			    };
-			    
 			    runextract();
-			    
-	
-			}, (node.interval * 1000)));
+
+			};
+			
+			node.poll_ids.push(setInterval(runNode, (node.interval * 1000)));
 		}
 		if (n.active) node.activate();
         
@@ -155,6 +170,29 @@ var oa = new OAuth2(
 
 
 var credentials = {};
+var oAuthRefresh = function(nodeid, successcallback, errorcallback) {
+	
+	var credentials = RED.nodes.getCredentials(nodeid);
+
+	if (credentials.refresh_token != null) {
+		oa.getOAuthAccessToken(
+			credentials.refresh_token,
+	    	{ grant_type: 'refresh_token',   redirect_uri: redirectUrl, format: 'json'},
+	        function(error, oauth_access_token, oauth_refresh_token, results){
+	            if (error){
+	            	errorcallback ("Error with Oauth refresh cycle " + JSON.stringify(error));
+	            } else {
+	                credentials.access_token = oauth_access_token;
+	                RED.nodes.deleteCredentials(nodeid);
+	                RED.nodes.addCredentials(nodeid,credentials);
+	                successcallback();
+	            }
+	    	});
+	} else {
+		errorcallback ("No refresh Token, ensure your connected app is setup to allow refresh scope & only login on first use");
+		
+	}
+}
 
 RED.app.get('/salesforce/:id', function(req,res) {
     var credentials = RED.nodes.getCredentials(req.params.id);
@@ -172,29 +210,50 @@ RED.app.delete('/salesforce/:id', function(req,res) {
 
 RED.app.get('/salesforce/:id/sobjects/:mode', function(req,res) {
 	var nodeid = req.params.id,
-		mode = (req.params.mode == 'all') ? '' : ('/'+req.params.mode+'/describe');
+		mode = 'sobjects' + ((req.params.mode == 'all') ? '' : ('/'+req.params.mode+'/describe'));
 	
-	console.log ('get sobjects for node ' + nodeid + ', mode : ' + mode);
-	var credentials = RED.nodes.getCredentials(nodeid);
-    
-    /* get the username */ 
-    var getres = '', getopts = {
-        	hostname: url.parse(credentials.instance_url).hostname,
-            path: '/services/data/v26.0/sobjects' + mode,
-            headers:{
-            	'Authorization': 'Bearer '+ credentials.access_token
-            }};
-  
-    https.get (getopts, function (res_ident) {
-    	res_ident.setEncoding('utf8');
-    	res_ident.on('data', function (chunk) { getres += chunk; });
-    	res_ident.on('end', function () {
-      	  	res.send(getres);
-      	});
-    }).on('error', function(e) {
-    	console.log("Got error: " + e.message);
-    	res.send("yeah something broke.");
-    });
+	if (req.params.mode == 'StreamingAPI') {
+		mode = 'query/?q='+encodeURIComponent('select Id, Name, Query, ApiVersion, IsActive, NotifyForFields, NotifyForOperations from PushTopic');
+	}
+	console.log ('Get salesforce MetaData for Node ' + nodeid + ', mode : ' + mode);
+	
+	var getMetaSObjectDate = function() {
+		var credentials = RED.nodes.getCredentials(nodeid);
+	    
+	    /* get the username */ 
+	    var getres = '', getopts = {
+	        	hostname: url.parse(credentials.instance_url).hostname,
+	            path: '/services/data/v29.0/' + mode,
+	            headers:{
+	            	'Authorization': 'Bearer '+ credentials.access_token
+	            }};
+	  
+	    https.get (getopts, function (res_ident) {
+	    	res_ident.setEncoding('utf8');
+	    	res_ident.on('data', function (chunk) { getres += chunk; });
+	    	res_ident.on('end', function () {
+	    		console.log ('MetaData results ' + res_ident.statusCode + ', got:' + getres);
+	    		if (res_ident.statusCode == 401) {
+	    			console.log ( 'Unauthorized, do a refresh cycle');
+	    			oAuthRefresh(nodeid, function() {
+	    				getMetaSObjectDate();
+	    			}, function(msg) {
+	    				res.send({ sobjects: [ {name: 'ERROR', label: msg}]});
+	    			});
+	    		}
+	    		else if (res_ident.statusCode == 200) {	
+	    			
+	      	  		res.send(getres);
+	    		} else {
+	    			res.send({ sobjects: [ {name: 'ERROR', label: res_ident.statusCode}]});
+	    		}
+	      	});
+	    }).on('error', function(e) {
+	    	console.log("Got error: " + e.message);
+	    	res.send("yeah something broke.");
+	    });
+	 };
+	 getMetaSObjectDate();
 });
 
 RED.app.post("/salesforce/:id/activate/:state", function(req,res) {

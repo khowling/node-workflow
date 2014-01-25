@@ -109,16 +109,24 @@
         <label for="node-input-salesforce"><i class="icon-user"></i> Log in as</label>
         <input type="text" id="node-input-salesforce">
     </div>
+    
+ 
+    
     <div class="form-row">
         <label for="node-input-importtype"><i class="icon-search"></i> API Type</label>
         <select type="text" id="node-input-importtype" style="display: inline-block; vertical-align: middle; width:60%;">
-			<option value="soql">Enter the SOQL Query</option>            
-			<option value="sobjects">all Records of a Oject</option>
-            <option value="stream">Subscribe to Streaming API</option>
+			<option value="soql">Enter a SOQL Query</option>            
+			<option value="sobjects">Select a SOject</option>
+            <option value="StreamingAPI">Subscribe to Streaming API</option>
             <option value="outmessage">Listen for Outbound Message</option>
         </select>
     </div>
 
+	<div class="form-row" id="node-input-soql-row" >
+        <label for="node-input-soql"><i class="icon-search"></i> <span id="node-input-soql-label">for</span></label>
+        <input type="text" id="node-input-soql" placeholder="Your SOQL">
+    </div>
+    
 	<div class="form-row" id="node-input-sobject-row" >
         <label for="node-input-sobject"><i class="icon-search"></i> SObjects</label> 
         <select type="text" id="node-input-sobject" style="display: inline-block; vertical-align: middle; width:60%;">
@@ -138,22 +146,42 @@
 		</div>
 	</div>
 
+	<div class="form-row" id="node-input-push_topic-row" >
+        <label for="node-input-push_topic"><i class="icon-search"></i> Push Topics</label> 
+        <select type="text" id="node-input-push_topic" style="display: inline-block; vertical-align: middle; width:60%;">
+        </select>
+		<div style="display: inline-block; width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-push_topic-spinner"></div>
+    </div>
+
+
+
     <div class="form-row" id="node-input-interval-row" >
         <label for="node-input-interval"><i class="icon-time"></i> <span id="node-input-interval-label">for</span></label>
         <input type="text" id="node-input-interval" placeholder="Polling Interval (in Seconds)">
     </div>
 
 
-    <div class="form-tips">Tip: Use commas without spaces between multiple search terms. Comma = OR, Space = AND.
-    <br/>The salesforce API WILL NOT deliver 100% of all tweets.
-    <br/>Tweets of who you follow will include their retweets and favourites.</div>
+    <div class="form-tips">Streaming API is a great choice for real-time out-bound messaging.  To create more Push Topics, login to salesforce and in the Developer Console, execute the following Apex Code
+		
+<div>
+	<pre style="line-height:15px; font-size:10px;">
+PushTopic pushTopic = new PushTopic();
+pushTopic.ApiVersion = 23.0;
+pushTopic.Name = 'AllAccounts';
+pushTopic.Description = 'All records for the Account object';
+pushtopic.Query = 'SELECT Id, Name FROM Account';
+insert pushTopic;
+System.debug('Created new PushTopic: '+ pushTopic.Id);
+	</pre>
+
+</div>    </div>
 </script>
 
 <script type="text/x-red" data-help-name="salesforce in">
-    <p>salesforce input node. Can be used to search either:
-    <ul><li>the public or a user's stream for tweets containing the configured search term</li>
-        <li>all tweets by specific users</li>
-        <li>direct messages received by the authenticated user</li>
+    <p>Salesforce input node. Can be used to either:
+    <ul><li>Run specified a SOQL Query</li>
+        <li>Return records from a SObject</li>
+        <li>Subscribe to a Query on the Streaming API</li>
     </ul></p>
     <p>Use space for <i>and</i> and comma , for <i>or</i> when searching for multiple terms.</p>
     <p>Sets the <b>msg.topic</b> to <i>tweets/</i> and then appends the senders screen name.</p>
@@ -174,8 +202,9 @@
             importtype: {value:"",required:true},
             sobject: {value:""},
             sobject_fields: {value:"",required:true},
+            soql: {value:""},
             interval: {value:"10", required:true, validate:RED.validators.number()},
-            topic: {value:"sfdc"},
+            push_topic: {value:""},
             active: {value:true}
         },
         inputs:0,
@@ -217,6 +246,7 @@
             $("#node-input-sobject-row").hide();
             $("#node-input-interval-row").hide();
             $("#node-input-sobject-fields-row").hide();
+            $("#node-input-push_topic-row").hide();
             $("#node-input-sobject-fields-spinner").hide();
             $("#node-input-sobject-spinner").hide();
             
@@ -246,17 +276,33 @@
 
             $("#node-input-importtype").change(function() {
                 var type = $("#node-input-importtype option:selected").val();
+                
                 console.log('myNode ' + myNode.id  + ' : ' + myNode.salesforce);
-
-                if (type == "sobjects") {
+                
+				$("#node-input-sobject-row").hide();
+	            $("#node-input-interval-row").hide();
+	            $("#node-input-sobject-fields-row").hide();
+	            $("#node-input-push_topic-row").hide();
+	            $("#node-input-soql-row").hide();
+	            $("#node-input-sobject-fields-spinner").hide();
+	            $("#node-input-sobject-spinner").hide();
+            	
+            	/* $("#node-input-sobject_fields").val ('');
+            	 * $("#node-input-sobject").val('');
+            	 * $("#node-input-soql").val('');
+            	 */
+            	 
+            	if (type == "soql") {
+            		$("#node-input-soql-row").show();
+            		$("#node-input-interval-row").show();
+                } else if (type == "sobjects") {
                     $("#node-input-sobject-row").show();
                     $("#node-input-interval-row").show();
-                    $("#node-input-sobject_fields-spinner").hide();
                     $("#node-input-sobject-fields-row").show();
                     $("#node-input-sobject-spinner").show();
                     $("#node-input-sobject").find('option').remove().end();
                     
-                     $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/all',function(data) {
+                    $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/all',function(data) {
 				            if (data) {
 				                for (sobj in data.sobjects) {
 				                	$('#node-input-sobject')
@@ -266,12 +312,24 @@
 				                $("#node-input-sobject-spinner").hide();
 				                $("#node-input-sobject").val(myNode.sobject);
 				            }
+				       });
+                } else if (type == "StreamingAPI") {
+            		$("#node-input-push_topic-row").show();
+                    $("#node-input-push_topic-spinner").show();
+                    
+                	   $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/StreamingAPI',function(data) {
+				            if (data) {
+				                for (sobj in data.records) {
+				              
+				                	$('#node-input-push_topic')
+							          .append($('<option>', { value : data.records[sobj].Name })
+							          .text(data.records[sobj].Query)); 
+				                }
+				                $("#node-input-push_topic-spinner").hide();
+				                $("#node-input-push_topic").val(myNode.push_topic);
+				            }
 				        })
-                } else {
-                    $("#node-input-sobject-row").hide();
-            		$("#node-input-interval-row").hide();
-            		$("#node-input-sobject-fields-row").hide();
-                }             
+                } else {}             
 
             });
             $("#node-input-importtype").change();
