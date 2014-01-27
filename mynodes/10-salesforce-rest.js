@@ -130,10 +130,10 @@ function SalesforceGetNode(n) {
 		    		    node.log ('subscript Faye Client : ' + "/topic/"+node.push_topic);
 		    		    
 		    		    node._streamListener = function (message) {
-		    		    	node.log ('Got message : ' + message);
+		    		    	node.log (node.importtype + ': Got message : ' + JSON.stringify(message));
 			    			var msg = { 
 								 topic:node.importtype+"/"+credentials.screen_name, 
-								 payload:message, 
+								 payload:message.sobject, 
 								 other: "other" };
 							  
 			                  node.send(msg);
@@ -283,6 +283,7 @@ var oAuthRefresh = function(nodeid, successcallback, errorcallback) {
 	}
 }
 
+/* Called by 'pollSalesforceCredentials', see if Oauth call back has stored the credentials yet */
 RED.app.get('/salesforce/:id', function(req,res) {
     var credentials = RED.nodes.getCredentials(req.params.id);
     if (credentials) {
@@ -363,6 +364,7 @@ RED.app.post("/salesforce/:id/activate/:state", function(req,res) {
 	}
 });
 
+/* Initiate the Oauth handshake for the "salesforce-credentials" id */
 RED.app.get('/salesforce/:id/auth', function(req, res){
 	res.redirect(oa.getAuthorizeUrl({ 
         response_type: 'code', 
@@ -372,6 +374,7 @@ RED.app.get('/salesforce/:id/auth', function(req, res){
         state: req.params.id}));
 });
 
+/* salesforce calls the callback with the passed in "salesforce-credentials" id in the 'state' parameter */
 RED.app.get('/salesforce/auth/callback', function(req, res, next){
 	console.log ('callback state : ' + req.param('state'));
 	console.log ('callback state : ' + req.param('code'));

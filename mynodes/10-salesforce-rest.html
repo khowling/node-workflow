@@ -39,6 +39,8 @@
         $("#node-config-input-screen_name").val(sn);
         $("#node-config-salesforce-row").html('<label><i class="icon-user"></i> salesforce ID</label><span class="input-xlarge uneditable-input">'+sn+'</span>');
     }
+    
+    /* see if the Oauth callback has been called & stored the credentials */
     function pollSalesforceCredentials(e) {
         $.getJSON('salesforce/'+salesforceConfigNodeId,function(data) {
             if (data.sn) {
@@ -62,6 +64,7 @@
         exportable: false,
         oneditprepare: function() {
         
+        	/* called when 'Login As' Pen Icon is pressed! - with valid 'this.id' representing 'salesforce-credentials' */
             console.log ('salesforce-credentials: ' + this.id);
             salesforceConfigNodeId = this.id;
             
@@ -241,8 +244,18 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
             return this.name?"node_label_italic":"";
         },
         oneditprepare: function() {
-        	var myNode = this;
 
+        	var node_credentials = this.salesforce;
+        	var node_sobject = this.sobject;
+        	console.log('salesforce in  ' + this.id  + ', credentials : ' + node_credentials);
+        	
+			/* salesforce-credentials Change */
+			$("#node-input-salesforce").change(function() {
+				var new_cred = $("#node-input-salesforce").val();
+				console.log('change : node-input-salesforce: ' + new_cred);
+				if (new_cred != '_ADD_') node_credentials = new_cred;
+			});
+			
             $("#node-input-sobject-row").hide();
             $("#node-input-interval-row").hide();
             $("#node-input-sobject-fields-row").hide();
@@ -254,10 +267,10 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
             		$("#node-input-sobject_fields").val ('Id,Name');
             })
             $("#node-input-sobject-fields-all").click(function() {
-            	var sobject = $("#node-input-sobject option:selected").val();
+            	var selected_sobject = $("#node-input-sobject option:selected").val();
            		$("#node-input-sobject-fields-spinner").show();
-           		
-           		$.getJSON('salesforce/'+myNode.salesforce+'/sobjects/'+sobject,function(data) {
+           		if (node_credentials != null) {
+           			$.getJSON('salesforce/'+node_credentials+'/sobjects/'+selected_sobject,function(data) {
 			            var fields = '', first = true;
 			            if (data) {
 			                for (sobj in data.fields) {
@@ -269,15 +282,16 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 			            $("#node-input-sobject-fields-spinner").hide();
 			            $("#node-input-sobject_fields").val (fields);
 			        })
-            		
-           		
+            	} else {
+            		$("#node-input-sobject_fields").val ('Please - Set Salesforce Credentials first');
+            	}
             })
             
 
             $("#node-input-importtype").change(function() {
                 var type = $("#node-input-importtype option:selected").val();
                 
-                console.log('myNode ' + myNode.id  + ' : ' + myNode.salesforce);
+                console.log('salesforce in  importtype change' + this.id  + ', credentials : ' + node_credentials);
                 
 				$("#node-input-sobject-row").hide();
 	            $("#node-input-interval-row").hide();
@@ -286,12 +300,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 	            $("#node-input-soql-row").hide();
 	            $("#node-input-sobject-fields-spinner").hide();
 	            $("#node-input-sobject-spinner").hide();
-            	
-            	/* $("#node-input-sobject_fields").val ('');
-            	 * $("#node-input-sobject").val('');
-            	 * $("#node-input-soql").val('');
-            	 */
-            	 
+
             	if (type == "soql") {
             		$("#node-input-soql-row").show();
             		$("#node-input-interval-row").show();
@@ -299,10 +308,15 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
                     $("#node-input-sobject-row").show();
                     $("#node-input-interval-row").show();
                     $("#node-input-sobject-fields-row").show();
-                    $("#node-input-sobject-spinner").show();
+                    
+                    var selected_sobject = $("#node-input-sobject option:selected").val();
                     $("#node-input-sobject").find('option').remove().end();
                     
-                    $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/all',function(data) {
+                    if (node_credentials != null) {
+                    	$("#node-input-sobject-spinner").show();
+                    	
+                    	
+                    	$.getJSON('salesforce/'+node_credentials+'/sobjects/all',function(data) {
 				            if (data) {
 				                for (sobj in data.sobjects) {
 				                	$('#node-input-sobject')
@@ -310,15 +324,22 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 							          .text(data.sobjects[sobj].label)); 
 				                }
 				                $("#node-input-sobject-spinner").hide();
-				                $("#node-input-sobject").val(myNode.sobject);
+				                $("#node-input-sobject").val(selected_sobject);
 				            }
 				       });
+				    } else {
+				    	$('#node-input-sobject').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+				    }
                 } else if (type == "StreamingAPI") {
             		$("#node-input-push_topic-row").show();
-                    $("#node-input-push_topic-spinner").show();
-                    $("#node-input-push_topic").find('option').remove().end();
                     
-                	   $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/StreamingAPI',function(data) {
+                    var selected_push_topic = $("#node-input-push_topic option:selected").val();
+                    $("#node-input-push_topic").find('option').remove().end();
+
+                    if (node_credentials != null) {
+                    	$("#node-input-push_topic-spinner").show();
+                    	
+                	    $.getJSON('salesforce/'+node_credentials+'/sobjects/StreamingAPI',function(data) {
 				            if (data) {
 				                for (sobj in data.records) {
 				              
@@ -327,9 +348,12 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 							          .text(data.records[sobj].Query)); 
 				                }
 				                $("#node-input-push_topic-spinner").hide();
-				                $("#node-input-push_topic").val(myNode.push_topic);
+				                $("#node-input-push_topic").val(selected_push_topic);
 				            }
-				        })
+				        });
+				   } else {
+				    	$('#node-input-push_topic').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+				    }
                 } else {}             
 
             });
@@ -374,21 +398,36 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
             return "salesforce";
         },
         oneditprepare: function() {
-        	var myNode = this;
-        	$("#node-input-sobject-spinner").show();
+        
+        	var node_credentials = this.salesforce;
+        	var node_sobject = this.sobject;
+        	console.log('salesforce out  ' + this.id  + ', credentials : ' + node_credentials);
+        	
+			/* salesforce-credentials Change */
+			$("#node-input-salesforce").change(function() {
+				var new_cred = $("#node-input-salesforce").val();
+				console.log('salesforce out change : node-input-salesforce: ' + new_cred);
+				if (new_cred != '_ADD_') node_credentials = new_cred;
+			});
+			
+        	
             $("#node-input-sobject").find('option').remove().end();
-            
-            $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/all',function(data) {
-	            if (data) {
-	                for (sobj in data.sobjects) {
-	                	$('#node-input-sobject')
-				          .append($('<option>', { value : data.sobjects[sobj].name })
-				          .text(data.sobjects[sobj].label)); 
-	                }
-	                $("#node-input-sobject-spinner").hide();
-	                $("#node-input-sobject").val(myNode.sobject);
-	            }
-	       	});
+            if (node_credentials != null) {
+            	$("#node-input-sobject-spinner").show();
+	            $.getJSON('salesforce/'+node_credentials+'/sobjects/all',function(data) {
+		            if (data) {
+		                for (sobj in data.sobjects) {
+		                	$('#node-input-sobject')
+					          .append($('<option>', { value : data.sobjects[sobj].name })
+					          .text(data.sobjects[sobj].label)); 
+		                }
+		                $("#node-input-sobject-spinner").hide();
+		                $("#node-input-sobject").val(node_sobject);
+		            }
+		       	});
+		    } else {
+		    	$('#node-input-sobject').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+		    }
         }
     });
 </script>
