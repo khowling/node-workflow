@@ -201,7 +201,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
             salesforce: {type:"salesforce-credentials",required:true},
             importtype: {value:"",required:true},
             sobject: {value:""},
-            sobject_fields: {value:"",required:true},
+            sobject_fields: {value:"",required:false},
             soql: {value:""},
             interval: {value:"10", required:true, validate:RED.validators.number()},
             push_topic: {value:""},
@@ -342,33 +342,53 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 
 <script type="text/x-red" data-template-name="salesforce out">
     <div class="form-row">
-        <label for="node-input-salesforce"><i class="icon-user"></i> salesforce</label>
+        <label for="node-input-salesforce"><i class="icon-user"></i> Login As </label>
         <input type="text" id="node-input-salesforce">
     </div>
-    <div class="form-row">
-        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
+    
+	<div class="form-row" id="node-input-sobject-row" >
+        <label for="node-input-sobject"><i class="icon-search"></i> SObjects</label> 
+        <select type="text" id="node-input-sobject" style="display: inline-block; vertical-align: middle; width:60%;">
+        </select>
+		<div style="display: inline-block; width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-sobject-spinner"></div>
     </div>
 </script>
 
 <script type="text/x-red" data-help-name="salesforce out">
-    <p>salesforce out node. Tweets the <b>msg.payload</b>.</p>
+    <p>salesforce out node. Stores the <b>msg.payload</b>.</p>
 </script>
 
 <script type="text/javascript">
     RED.nodes.registerType('salesforce out',{
-        category: 'social-output',
+        category: 'output',
         color:"#C0DEED",
         defaults: {
             salesforce: {type:"salesforce-credentials",required:true},
-            name: {value:"Tweet"}
+            sobject: {value:""},
         },
         inputs:1,
         outputs:0,
         icon: "salesforce.png",
         align: "right",
         label: function() {
-            return this.name;
+            return "salesforce";
+        },
+        oneditprepare: function() {
+        	var myNode = this;
+        	$("#node-input-sobject-spinner").show();
+            $("#node-input-sobject").find('option').remove().end();
+            
+            $.getJSON('salesforce/'+myNode.salesforce+'/sobjects/all',function(data) {
+	            if (data) {
+	                for (sobj in data.sobjects) {
+	                	$('#node-input-sobject')
+				          .append($('<option>', { value : data.sobjects[sobj].name })
+				          .text(data.sobjects[sobj].label)); 
+	                }
+	                $("#node-input-sobject-spinner").hide();
+	                $("#node-input-sobject").val(myNode.sobject);
+	            }
+	       	});
         }
     });
 </script>

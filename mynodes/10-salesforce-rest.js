@@ -18,7 +18,6 @@ RED.nodes.registerType("salesforce-credentials",SalesforceNode);
 /* Run when the node is deplyed */
 function SalesforceGetNode(n) {
 	var node = this;
-
 	RED.nodes.createNode(node,n);
 
 	node.importtype = n.importtype;
@@ -38,12 +37,15 @@ function SalesforceGetNode(n) {
     
     if (credentials && credentials.screen_name == node.salesforceConfig.screen_name) {
 
-
 		node.poll_ids = [];
-		
 		node.deactivate = function() {
 			node.log ('deactivate salesforce-in');
 			node.active = false;
+			
+			if (node._fayeClient) {
+				node.log ('Unsubscribing from ' + node.push_topic);
+				node._fayeClient.unsubscribe("/topic/"+node.push_topic)
+			}
 			
 			if (node.poll_ids) {
 	            for (var i=0;i<node.poll_ids.length;i++) {
@@ -56,8 +58,10 @@ function SalesforceGetNode(n) {
 			node.log ('activating salesforce-in');
 			node.active = true;
 			
+			/* complete logic to run the Node */
 			var runNode = function() {
 		    	
+				/* complete logic to support 'SOQL' or 'SOBJECT' modes */
 		    	var runextract = function() { 
 		    		
 			    	var query = '';
@@ -69,7 +73,7 @@ function SalesforceGetNode(n) {
 			    	
 			        var getopts = {
 			            	hostname: url.parse(credentials.instance_url).hostname,
-			                path: '/services/data/v28.0/query/?q='+encodeURIComponent(query),
+			                path: '/services/data/v29.0/query/?q='+encodeURIComponent(query),
 			                headers:{
 			                	'Authorization': 'Bearer '+ credentials.access_token
 			                }};
@@ -82,7 +86,7 @@ function SalesforceGetNode(n) {
 			        		if (res_data.statusCode == 401) {
 			        			
 			        			node.warn ( 'Unauthorized, do a refresh cycle');
-			        			oAuthRefresh(this.salesforce, function() {
+			        			oAuthRefresh(node.salesforce, function() {
 			        				runextract();
 			        			}, function(msg) {
 			        				node.deactivate();
@@ -93,7 +97,7 @@ function SalesforceGetNode(n) {
 			        		} else if (res_data.statusCode == 200) {
 				        		var msg = { 
 									 topic:node.importtype+"/"+credentials.screen_name, 
-									 payload:getres, 
+									 payload:JSON.parse(getres).records, 
 									 other: "other" };
 								  
 				                  node.send(msg);
@@ -109,31 +113,52 @@ function SalesforceGetNode(n) {
 			    };
 			    
 
-		    	if (node.importtype == 'StreamingAPI'){
-		    		/* source : https://github.com/faye/faye/blob/master/javascript/protocol/client.js */
-		    		if (!node._fayeClient) {
-		    		    Faye.Transport.NodeHttp.prototype.batching = false; // prevent streaming API server error
-		    		    Faye.Logging.LOG_LEVELS = 0;
-		    		    node._fayeClient = new Faye.Client(credentials.instance_url + '/cometd/29.0', {});
-		    		    node._fayeClient.setHeader('Authorization', 'Bearer '+ credentials.access_token);
-		    		}
-	    		    node.log ('subscript Faye Client : ' + "/topic/"+node.push_topic);
-		    		node._fayeClient.subscribe("/topic/"+node.push_topic, function (message) {
-		    			node.log ('Got message : ' + message);
-		    			var msg = { 
-							 topic:node.importtype+"/"+credentials.screen_name, 
-							 payload:message, 
-							 other: "other" };
-						  
-		                  node.send(msg);
-		    		});  
-		    	} else {
+		    	if (node.importtype == 'soql' || node.importtype == 'sobjects') {
 		    		runextract();
+		    	} else if (node.importtype == 'StreamingAPI') {
+		    		
+		    		node.log ('Proactive oauth refresh');
+		    		oAuthRefresh(node.salesforce, function() {
+        				
+			    		/* source : https://github.com/faye/faye/blob/master/javascript/protocol/client.js */
+			    		if (!node._fayeClient) {
+			    		    Faye.Transport.NodeHttp.prototype.batching = false; // prevent streaming API server error
+			    		    Faye.Logging.LOG_LEVELS = 0;
+			    		    node._fayeClient = new Faye.Client(credentials.instance_url + '/cometd/29.0', {});
+			    		    node._fayeClient.setHeader('Authorization', 'Bearer '+ credentials.access_token);
+			    		}
+		    		    node.log ('subscript Faye Client : ' + "/topic/"+node.push_topic);
+		    		    
+		    		    node._streamListener = function (message) {
+		    		    	node.log ('Got message : ' + message);
+			    			var msg = { 
+								 topic:node.importtype+"/"+credentials.screen_name, 
+								 payload:message, 
+								 other: "other" };
+							  
+			                  node.send(msg);
+		    		    };
+		    		    
+			    		node._fayeClient.subscribe("/topic/"+node.push_topic, node._streamListener); 
+			    		
+        			}, function(msg) {
+        				node.deactivate();
+        				node.error(msg);
+
+        			})
+        			 
+		    	} else {
+		    		node.deactivate();
+		        	node.error("importtype not yet implemented: " + node.importtype);
 		    	} 
 
 			};
+			
+			
+			/* run the node for the 1st time */
 			runNode();
 			
+			/* setup Polling Interval */
 			if (node.interval > 0 && node.importtype != 'StreamingAPI') {
 				node.poll_ids.push(setInterval(runNode, (node.interval * 1000)));
 			}
@@ -153,6 +178,69 @@ function SalesforceGetNode(n) {
     });
 }
 RED.nodes.registerType("salesforce in",SalesforceGetNode);
+
+
+function SalesforcePutNode(n) {
+	var node = this;
+    RED.nodes.createNode(node,n);
+    
+	node.sobject = n.sobject;
+	node.salesforce = n.salesforce;
+	
+	node.log ('calling SalesforcePutNode() : ' + node.sobject);
+	
+	node.salesforceConfig = RED.nodes.getNode(node.salesforce); // the 'salesforce-credentials' node
+    
+    var credentials = RED.nodes.getCredentials(node.salesforce);
+    node.log ('credentials:' + JSON.stringify(credentials) + ', "salesforce-credentials".screen_name: '+ node.salesforceConfig.screen_name);
+    
+    if (credentials && credentials.screen_name == node.salesforceConfig.screen_name) {
+    	
+    	node.log ('Setting up on-input for :' + credentials.screen_name);
+		node.on("input",function(msg) {
+			
+	        var postopts = {
+	            	hostname: url.parse(credentials.instance_url).hostname,
+	                path: '/services/data/v29.0/sobjects/'+ node.sobject + '/',
+	                method: 'POST',
+	                headers:{
+	                	'Content-Type' : 'application/json',
+	                	'Authorization': 'Bearer '+ credentials.access_token
+	                }};
+	        
+	        node.log('Sending Post ' + JSON.stringify(postopts) + ' DATA : ' + msg.payload);
+	    	var getres = ''
+	    	var req_data = https.request (postopts, function (res_data) {
+
+	        	res_data.on('data', function (chunk) { getres += chunk; });
+	        	res_data.on('end', function () {
+	        		if (res_data.statusCode == 401) {
+	        			
+	        			node.warn ( 'Unauthorized, do a refresh cycle');
+	        			oAuthRefresh(node.salesforce, function() {
+	        				runextract();
+	        			}, function(msg) {
+	        				node.error(msg);
+	
+	        			})
+	
+	        		} else if (res_data.statusCode == 201) {
+		                node.log('success');
+	        		} else {
+	        			node.error("yeah something broke." + res_data.statusCode + ' : ' + getres);
+	        		}
+	          	});
+	        }).on('error', function(e) {
+	        	node.error("Got REST API error: " + e.message);
+	        });
+	    	req_data.write(msg.payload);
+	    	req_data.end();
+	         
+	    });
+	}
+}
+RED.nodes.registerType("salesforce out",SalesforcePutNode);
+
 
 
 /* Oauth2 Authentication */
