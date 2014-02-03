@@ -272,7 +272,7 @@ var oAuthRefresh = function(nodeid, successcallback, errorcallback) {
 	            	errorcallback ("Error with Oauth refresh cycle " + JSON.stringify(error));
 	            } else {
 	                credentials.access_token = oauth_access_token;
-	                RED.nodes.deleteCredentials(nodeid);
+	            //    RED.nodes.deleteCredentials(nodeid);
 	                RED.nodes.addCredentials(nodeid,credentials);
 	                successcallback();
 	            }
@@ -376,21 +376,23 @@ RED.app.get('/salesforce/:id/auth', function(req, res){
 
 /* salesforce calls the callback with the passed in "salesforce-credentials" id in the 'state' parameter */
 RED.app.get('/salesforce/auth/callback', function(req, res, next){
-	console.log ('callback state : ' + req.param('state'));
-	console.log ('callback state : ' + req.param('code'));
-    var credentials = RED.nodes.getCredentials(req.param('state'));
+	var salesforce = req.param('state'),
+		code = req.param('code');
+	
+	console.log ('/salesforce/auth/callback : state : ' + salesforce);
+    
 
     oa.getOAuthAccessToken(
-    	req.param('code'),
+    	code,
     	{ grant_type: 'authorization_code',   redirect_uri: redirectUrl, format: 'json'},
         function(error, oauth_access_token, oauth_refresh_token, results){
             if (error){
                 console.log("Got error: " + error);
                 res.send("yeah something broke.");
             } else {
-            	console.log('request authorisation_code, got at: ' + oauth_access_token + ', rt: ' + oauth_refresh_token + ', rest: ' + JSON.stringify(results));
+            	console.log('/salesforce/auth/callback : request authorisation_code, got at: ' + oauth_access_token + ', rt: ' + oauth_refresh_token + ', rest: ' + JSON.stringify(results));
 
-                credentials = {};
+            	var credentials = {};
                 credentials.access_token = oauth_access_token;
                 credentials.refresh_token = oauth_refresh_token;
                 credentials.identity_url = url.parse(results.id);
@@ -411,7 +413,9 @@ RED.app.get('/salesforce/auth/callback', function(req, res, next){
                 	res_ident.on('end', function () {
     	          	     var obj = JSON.parse(getres);
     	          	  	 credentials.screen_name = obj.username;
-    	          	  	 RED.nodes.addCredentials(req.param('state'),credentials);
+    	          	  	 console.log("/salesforce/auth/callback :RED.nodes.addCredential: " + salesforce + ' : ' + JSON.stringify(credentials));
+    	          	  	 RED.nodes.addCredentials(salesforce,credentials);
+    	          	  	 
     	          	  	 res.send("<html><head></head><body>Authorised - you can close this window and return to Node-RED</body></html>");
     	          	});
                 }).on('error', function(e) {
