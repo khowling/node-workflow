@@ -1,0 +1,6 @@
+ENV.sh
+node_modules
+node_modules/*
+.project
+.settings
+.settings/*
