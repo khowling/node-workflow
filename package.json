@@ -10,6 +10,7 @@
         "express": "*",
         "oauth": "*",
         "url": "*",
+        "mongodb": "*",
         "faye" : "0.8.x"
     }
 }

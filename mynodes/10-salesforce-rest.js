@@ -20,7 +20,7 @@ function SalesforceGetNode(n) {
 	var node = this;
 	RED.nodes.createNode(node,n);
 
-	node.importtype = n.importtype;
+	node.input_type = n.input_type;
 	node.sobject = n.sobject;
 	node.sobject_fields = n.sobject_fields;
 	node.soql = n.soql;
@@ -28,7 +28,7 @@ function SalesforceGetNode(n) {
 	node.interval = n.interval;
 	node.push_topic = n.push_topic;
 	
-	node.log ('calling SalesforceGetNode() : ' + node.importtype + ' : ' + node.sobject + ' : ' + node.interval);
+	node.log ('calling SalesforceGetNode() : ' + node.input_type + ' : ' + node.sobject + ' : ' + node.interval);
 	
 	node.salesforceConfig = RED.nodes.getNode(node.salesforce); // the 'salesforce-credentials' node
     
@@ -65,9 +65,9 @@ function SalesforceGetNode(n) {
 		    	var runextract = function() { 
 		    		
 			    	var query = '';
-			    	if (node.importtype == 'soql') {
+			    	if (node.input_type == 'soql') {
 			    		query = node.soql;
-			    	} else if (node.importtype == 'sobjects') {
+			    	} else if (node.input_type == 'sobjects') {
 			    		query = 'SELECT '+node.sobject_fields+' FROM '+node.sobject;
 			    	}
 			    	
@@ -96,7 +96,7 @@ function SalesforceGetNode(n) {
 
 			        		} else if (res_data.statusCode == 200) {
 				        		var msg = { 
-									 topic:node.importtype+"/"+credentials.screen_name, 
+									 topic:node.input_type+"/"+credentials.screen_name, 
 									 payload:JSON.parse(getres).records, 
 									 other: "other" };
 								  
@@ -113,9 +113,9 @@ function SalesforceGetNode(n) {
 			    };
 			    
 
-		    	if (node.importtype == 'soql' || node.importtype == 'sobjects') {
+		    	if (node.input_type == 'soql' || node.input_type == 'sobjects') {
 		    		runextract();
-		    	} else if (node.importtype == 'StreamingAPI') {
+		    	} else if (node.input_type == 'StreamingAPI') {
 		    		
 		    		node.log ('Proactive oauth refresh');
 		    		oAuthRefresh(node.salesforce, function() {
@@ -130,9 +130,9 @@ function SalesforceGetNode(n) {
 		    		    node.log ('subscript Faye Client : ' + "/topic/"+node.push_topic);
 		    		    
 		    		    node._streamListener = function (message) {
-		    		    	node.log (node.importtype + ': Got message : ' + JSON.stringify(message));
+		    		    	node.log (node.input_type + ': Got message : ' + JSON.stringify(message));
 			    			var msg = { 
-								 topic:node.importtype+"/"+credentials.screen_name, 
+								 topic:node.input_type+"/"+credentials.screen_name, 
 								 payload:message.sobject, 
 								 other: "other" };
 							  
@@ -149,7 +149,7 @@ function SalesforceGetNode(n) {
         			 
 		    	} else {
 		    		node.deactivate();
-		        	node.error("importtype not yet implemented: " + node.importtype);
+		        	node.error("input_type not yet implemented: " + node.input_type);
 		    	} 
 
 			};
@@ -159,7 +159,7 @@ function SalesforceGetNode(n) {
 			runNode();
 			
 			/* setup Polling Interval */
-			if (node.interval > 0 && node.importtype != 'StreamingAPI') {
+			if (node.interval > 0 && node.input_type != 'StreamingAPI') {
 				node.poll_ids.push(setInterval(runNode, (node.interval * 1000)));
 			}
 		}
@@ -184,8 +184,11 @@ function SalesforcePutNode(n) {
 	var node = this;
     RED.nodes.createNode(node,n);
     
-	node.sobject = n.sobject;
+	
 	node.salesforce = n.salesforce;
+	node.output_type = n.output_type;
+	node.sobject = n.sobject;
+	node.upsert_field = n.upsert_field;
 	
 	node.log ('calling SalesforcePutNode() : ' + node.sobject);
 	
@@ -199,6 +202,7 @@ function SalesforcePutNode(n) {
     	node.log ('Setting up on-input for :' + credentials.screen_name);
 		node.on("input",function(msg) {
 			
+
 	        var postopts = {
 	            	hostname: url.parse(credentials.instance_url).hostname,
 	                path: '/services/data/v29.0/sobjects/'+ node.sobject + '/',
@@ -208,6 +212,11 @@ function SalesforcePutNode(n) {
 	                	'Authorization': 'Bearer '+ credentials.access_token
 	                }};
 	        
+			if (node.output_type == 'upsert') {
+				postopts.path = postopts.path + node.upsert_field + '/' + msg.payload[node.upsert_field];
+				postopts.method = 'PATCH'; 
+			}
+			
 	        node.log('Sending Post ' + JSON.stringify(postopts) + ' DATA : ' + msg.payload);
 	    	var getres = ''
 	    	var req_data = https.request (postopts, function (res_data) {
