@@ -1,15 +1,16 @@
 /**
  * New node file
  */
-var http = require('http');
-var express = require("express");
-var RED = require("node-red");
+var	  http = require('http')
+	, express = require("express")
+	, path = require('path')
+	, RED = require("node-red");
 
 // Create an Express app
 var app = express();
 
 // Add a simple route for static content served from 'public'
-app.use("/",express.static("public"));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Create a server
 var server = http.createServer(app);

@@ -134,7 +134,7 @@
         <label for="node-input-sobject"><i class="icon-search"></i> SObjects</label> 
         <select type="text" id="node-input-sobject" style="display: inline-block; vertical-align: middle; width:60%;">
         </select>
-		<div style="display: inline-block; width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-sobject-spinner"></div>
+		<div style="display: inline-block; width:15px;  height:15px; background-image: url('/ajax-loader.gif');" id="node-input-sobject-spinner"></div>
     </div>
 
 	<div class="form-row" id="node-input-sobject-fields-row">
@@ -144,7 +144,7 @@
 			<div style="display: inline-block;" >
 				<a href="#" class="btn btn-mini" id="node-input-sobject-fields-all" style="margin-top: 4px;"><i class="icon-plus"></i> All</a>
 				<a href="#" class="btn btn-mini" id="node-input-sobject-fields-common" style="margin-top: 4px;"><i class="icon-plus"></i> Common</a>
-    			<div style="display: inline-block; margin-top: 4px; margin-left: 4px;  width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-sobject-fields-spinner"></div>
+    			<div style="display: inline-block; width:15px;  height:15px; background-image: url('/ajax-loader.gif');" id="node-input-sobject-fields-spinner"></div>
 			</div>
 		</div>
 	</div>
@@ -153,7 +153,7 @@
         <label for="node-input-push_topic"><i class="icon-search"></i> Push Topics</label> 
         <select type="text" id="node-input-push_topic" style="display: inline-block; vertical-align: middle; width:60%;">
         </select>
-		<div style="display: inline-block; width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-push_topic-spinner"></div>
+		<div style="display: inline-block; width:15px;  height:15px; background-image: url('/ajax-loader.gif');" id="node-input-push_topic-spinner"></div>
     </div>
 
 
@@ -246,7 +246,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
         oneditprepare: function() {
 
         	var node_credentials = this.salesforce;
-        	var node_sobject = this.sobject;
+
         	console.log('salesforce in  ' + this.id  + ', credentials : ' + node_credentials);
         	
 					/* salesforce-credentials Change */
@@ -293,13 +293,13 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
               
             console.log('salesforce in  input_type change' + this.id  + ', credentials : ' + node_credentials);
               
-					$("#node-input-sobject-row").hide();
-           $("#node-input-interval-row").hide();
-           $("#node-input-sobject-fields-row").hide();
-           $("#node-input-push_topic-row").hide();
-           $("#node-input-soql-row").hide();
-           $("#node-input-sobject-fields-spinner").hide();
-           $("#node-input-sobject-spinner").hide();
+						$("#node-input-sobject-row").hide();
+						$("#node-input-interval-row").hide();
+						$("#node-input-sobject-fields-row").hide();
+						$("#node-input-push_topic-row").hide();
+						$("#node-input-soql-row").hide();
+						$("#node-input-sobject-fields-spinner").hide();
+						$("#node-input-sobject-spinner").hide();
 
           	if (type == "soql") {
           		$("#node-input-soql-row").show();
@@ -365,39 +365,40 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 
 
 <script type="text/x-red" data-template-name="salesforce out">
-    	<div class="form-row">
-        <label for="node-input-salesforce"><i class="icon-user"></i> Login As </label>
-        <input type="text" id="node-input-salesforce">
-    	</div>
-
-    	<div class="form-row">
-        <label for="node-input-output_type"><i class="icon-search"></i> API Type</label>
-        <select type="text" id="node-input-output_type" style="display: inline-block; vertical-align: middle; width:60%;">
-						<option value="insert">Insert</option>            
-						<option value="update">Update</option>
-            <option value="upsert">Upsert</option>
-        </select>
-    	</div>
-    
-			<div class="form-row" id="node-input-sobject-row" >
-        <label for="node-input-sobject"><i class="icon-search"></i> SObjects</label> 
-        <select type="text" id="node-input-sobject" style="display: inline-block; vertical-align: middle; width:60%;">
-        </select>
-				<div style="display: inline-block; width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-sobject-spinner"></div>
-    	</div>
-
-			<div class="form-row" id="node-input-upsert_field_row">
-        <label for="node-input-upsert_field"><i class="icon-search"></i> External Index Field</label>
-				<select type="text" id="node-input-upsert_field" style="display: inline-block; vertical-align: middle; width:60%;">
-        </select>
-				<div style="display: inline-block; width:15px;  height:15px; background-image: url('http://i.imgur.com/Rclk1Sf.png');" id="node-input-upsert_field_spinner"></div>
-			</div>
+	<div class="form-row">
+		<label for="node-input-salesforce"><i class="icon-user"></i> Login As </label>
+		<input type="text" id="node-input-salesforce">
+	</div>
+	
+	<div class="form-row">
+		<label for="node-input-output_type"><i class="icon-search"></i> API Type</label>
+		<select type="text" id="node-input-output_type" style="display: inline-block; vertical-align: middle; width:60%;">
+			<option value="insert">Insert</option>            
+			<option value="update">Update</option>
+		    <option value="upsert">Upsert</option>
+		</select>
+	</div>
+	
+	<div class="form-row" id="node-input-output_sobject-row" >
+		<label for="node-input-output_sobject"><i class="icon-search"></i> SObjects</label> 
+		<select type="text" id="node-input-output_sobject" style="display: inline-block; vertical-align: middle; width:60%;">
+		</select>
+		<div style="display: inline-block; width:15px;  height:15px; background-image: url('/ajax-loader.gif')" id="node-input-output_sobject-spinner"></div>
+	</div>
+	
+	<div class="form-row" id="node-input-upsert_field_row">
+		<label for="node-input-upsert_field"><i class="icon-search"></i> External Index Field</label>
+		<select type="text" id="node-input-upsert_field" style="display: inline-block; vertical-align: middle; width:60%;">
+		</select>
+		<div style="display: inline-block; width:15px;  height:15px; background-image: url('/ajax-loader.gif');" id="node-input-upsert_field_spinner"></div>
+	</div>
 
 </script>
 
 <script type="text/x-red" data-help-name="salesforce out">
     <p>salesforce out node. Stores the <b>msg.payload</b>.</p>
 </script>
+
 
 <script type="text/javascript">
     RED.nodes.registerType('salesforce out',{
@@ -406,7 +407,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
         defaults: {
             salesforce: {type:"salesforce-credentials",required:true},
             output_type: {value:"",required:true},
-            sobject: {value:""},
+            output_sobject: {value:""},
             upsert_field: {value:"",required:false}
         },
         inputs:1,
@@ -417,86 +418,123 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
             return "salesforce";
         },
         oneditprepare: function() {
-        
-        	$("#node-input-sobject-spinner").hide();
-          $("#node-input-upsert_field_row").hide();
-          $("#node-input-upsert_field_row_spinner").hide();
-          
+
         	var node_credentials = this.salesforce;
-        	var node_sobject = this.sobject;
-        	console.log('salesforce out  ' + this.id  + ', credentials : ' + node_credentials);
+        	var node_output_sobject = this.output_sobject;
+        	var node_output_type = this.output_type;
         	
-					/* salesforce-credentials Change */
-					$("#node-input-salesforce").change(function() {
-						var new_cred = $("#node-input-salesforce").val();
-						console.log('salesforce out change : node-input-salesforce: ' + new_cred);
-						if (new_cred != '_ADD_') node_credentials = new_cred;
-					});
-					
-        	/* update sobject list - run each time dialog is opened*/
-          $("#node-input-sobject").find('option').remove().end();
-          if (node_credentials != null) {
-          	$("#node-input-sobject-spinner").show();
-           $.getJSON('salesforce/'+node_credentials+'/sobjects/all',function(data) {
-            if (data) {
-                for (sobj in data.sobjects) {
-                	$('#node-input-sobject')
-			          .append($('<option>', { value : data.sobjects[sobj].name })
-			          .text(data.sobjects[sobj].label)); 
-                }
-                $("#node-input-sobject-spinner").hide();
-                $("#node-input-sobject").val(node_sobject);
-		            }
-		       	});
-			    } else {
-			    	$('#node-input-sobject').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
-			    }
-				  
-				  
+        	$("#node-input-output_sobject-spinner").hide();
+        	$("#node-input-upsert_field_row").hide();
+        	$("#node-input-upsert_field_spinner").hide();
+        	
+        	console.log('salesforce out  ' + this.id  + ', credentials : ' + node_credentials);
 
-
-				  /* change output-type  */
-				  $("#node-input-output_type").change(function() {
-	             
-	             
-						$("#node-input-upsert_field_row").hide();
-						$("#node-input-upsert_field_row_spinner").hide();
-						
-	          var type = $("#node-input-output_type option:selected").val();
-	          console.log('salesforce in  output_type change' + type + ' : ' + this.id  + ', credentials : ' + node_credentials);
+			/**** refresh_sobject_field ****/
+			var refresh_sobject_field = function() {
+	         
+	          var selected_sobject = $("#node-input-output_sobject option:selected").val() || node_output_sobject;
+	          console.log('refresh_sobject_field, sobject : ' + selected_sobject  + ', credentials : ' + node_credentials);
 	
-	          if (type == "upsert") {
-							$("#node-input-upsert_field_row").show();
+						/**** update sobject list - run each time dialog is opened ****/
+	          $("#node-input-output_sobject").find('option').remove().end();
+	          if (node_credentials != null) {
+	          	$("#node-input-output_sobject-spinner").show();
+	           	$.getJSON('salesforce/'+node_credentials+'/sobjects/all',function(data) {
+	            	if (data) {
+		                for (sobj in data.sobjects) {
+		                	$('#node-input-output_sobject')
+							          .append($('<option>', { value : data.sobjects[sobj].name })
+							          .text(data.sobjects[sobj].name)); 
+		                }
+		                $("#node-input-output_sobject-spinner").hide();
+		                $("#node-input-output_sobject").val(selected_sobject);
+		                
+		                if (node_output_type == 'upsert') {
+		                	refresh_upsert_field();
+		                }
+				    }
+			    });
+	          } else {
+		    	$('#node-input-output_sobject').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+	          }
+			};
+				  
+			/**** refresh_upsert_field ****/
+			var refresh_upsert_field = function() {
+				
+				$("#node-input-upsert_field_row").show();
+			    
+		    	/* upsert selected, get the current sboject selected, & clear down any existing externalid values */ 
+		    	var selected_sobject = $("#node-input-output_sobject option:selected").val() || node_output_sobject;
+		    	var selected_upsert_field = $("#node-input-upsert_field option:selected").val();
+		    	
+		        console.log("refresh_sobject_field for : " + selected_sobject  + ", selected_upsert_field : " + selected_upsert_field);
+
+		          
+		    	$("#node-input-upsert_field").find('option').remove().end();
+			    	
+				if (selected_sobject != null) {
 				    
-				    	/* upsert selected, get the current sboject selected, & clear down any existing externalid values */ 
-				    	var selected_sobject = $("#node-input-sobject option:selected").val();
-              $("#node-input-upsert_field").find('option').remove().end();
-                
-              if (node_credentials != null) {
-                $("#node-input-upsert_field_row_spinner").show();
-                $.getJSON('salesforce/'+node_credentials+'/sobjects/'+selected_sobject,function(data) {
-			            var fields = '';
-			            if (data) {
-			                for (sobj in data.fields) {
-			                	if (data.fields[sobj].externalId || data.fields[sobj].type == 'id') {
+				  if (node_credentials != null) {
+					  $("#node-input-upsert_field_spinner").show();
+				
+					  $.getJSON('salesforce/'+node_credentials+'/sobjects/'+selected_sobject,function(data) {
+				        var fields = '';
+				        if (data) {
+				            for (sobj in data.fields) {
+				            	//console.log ('got field : ' + JSON.stringify(data.fields[sobj]));
+				            	if (data.fields[sobj].externalId || data.fields[sobj].type == 'id') {
 				                	
 				                	$('#node-input-upsert_field')
 									          .append($('<option>', { value : data.fields[sobj].name })
 									          .text(data.fields[sobj].name));
-			                	}
-			                	
-			                }
-			            }
-			            $("#node-input-upsert_field_spinner").hide();
-	            		//$("#node-input-sobject_fields").val (fields);
-	            
-				       	});
-					    } else {
-					    	$('#node-input-upsert_field').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
-						  }
-				    
-        		}
-        	});
-    		}
-    	});
+				            	}
+				            	
+				            }
+				        }
+				        $("#node-input-upsert_field_spinner").hide();
+						$("#node-input-upsert_field").val (selected_upsert_field);
+				
+					  });
+				  } else {
+			    	$('#node-input-upsert_field').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+				  }
+				}
+			}
+			
+			/***** salesforce-credentials Change *****/
+			$("#node-input-salesforce").change(function() {
+				var new_cred = $("#node-input-salesforce").val();
+				console.log('salesforce out, change credentials : : ' + new_cred);
+				if (new_cred != '_ADD_') {
+					node_credentials = new_cred;
+					refresh_sobject_field();
+				}
+			});
+					
+			/**** change sobject  ****/
+			$("#node-input-output_sobject").change( function() {
+		 		var type = $("#node-input-output_type option:selected").val();
+			  	console.log ('node-input-output_sobject: ' + type);
+			  	
+			  	if (type == "upsert") {
+			  		refresh_upsert_field();
+			  	}
+			});
+					
+			/**** change output-type  ****/
+			$("#node-input-output_type").change(function() {
+  	
+			  	var type = $("#node-input-output_type option:selected").val();
+			  	console.log ('node-input-output_type: ' + type);
+			  	
+			  	$("#node-input-upsert_field_row").hide();
+			  	
+			  	if (type == "upsert") {
+			  		refresh_upsert_field();
+			  	}
+			});
+	             
+		}
+	});
 </script>

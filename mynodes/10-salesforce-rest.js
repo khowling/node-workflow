@@ -187,10 +187,10 @@ function SalesforcePutNode(n) {
 	
 	node.salesforce = n.salesforce;
 	node.output_type = n.output_type;
-	node.sobject = n.sobject;
+	node.output_sobject = n.output_sobject;
 	node.upsert_field = n.upsert_field;
 	
-	node.log ('calling SalesforcePutNode() : ' + node.sobject);
+	node.log ('calling SalesforcePutNode() : ' + node.output_sobject);
 	
 	node.salesforceConfig = RED.nodes.getNode(node.salesforce); // the 'salesforce-credentials' node
     
@@ -201,49 +201,62 @@ function SalesforcePutNode(n) {
     	
     	node.log ('Setting up on-input for :' + credentials.screen_name);
 		node.on("input",function(msg) {
+			console.log ('got : ' + JSON.stringify(msg));
 			
-
-	        var postopts = {
-	            	hostname: url.parse(credentials.instance_url).hostname,
-	                path: '/services/data/v29.0/sobjects/'+ node.sobject + '/',
-	                method: 'POST',
-	                headers:{
-	                	'Content-Type' : 'application/json',
-	                	'Authorization': 'Bearer '+ credentials.access_token
-	                }};
-	        
-			if (node.output_type == 'upsert') {
-				postopts.path = postopts.path + node.upsert_field + '/' + msg.payload[node.upsert_field];
-				postopts.method = 'PATCH'; 
+			var runupload = function(sendobj) {
+				console.log ('got sendobj : ' + JSON.stringify(sendobj));
+		        var postopts = {
+		            	hostname: url.parse(credentials.instance_url).hostname,
+		                path: '/services/data/v29.0/sobjects/'+ node.output_sobject + '/',
+		                method: 'POST',
+		                headers:{
+		                	'Content-Type' : 'application/json',
+		                	'Authorization': 'Bearer '+ credentials.access_token
+		                }};
+		        
+				if (node.output_type == 'upsert') {
+					postopts.path = postopts.path + node.upsert_field + '/' + sendobj[node.upsert_field];
+					postopts.method = 'PATCH'; 
+				}
+				
+		        node.log('Sending Post ' + JSON.stringify(postopts) + ' DATA : ' + sendobj);
+		    	var getres = ''
+		    	var req_data = https.request (postopts, function (res_data) {
+	
+		        	res_data.on('data', function (chunk) { getres += chunk; });
+		        	res_data.on('end', function () {
+		        		if (res_data.statusCode == 401) {
+		        			
+		        			node.warn ( 'Unauthorized, do a refresh cycle');
+		        			oAuthRefresh(node.salesforce, function() {
+		        				runupload(sendobj);
+		        			}, function(msg) {
+		        				node.error(msg);
+		
+		        			})
+		
+		        		} else if (res_data.statusCode == 201) {
+			                node.log('success');
+		        		} else {
+		        			node.error("yeah something broke." + res_data.statusCode + ' : ' + getres);
+		        		}
+		          	});
+		        }).on('error', function(e) {
+		        	node.error("Got REST API error: " + e.message);
+		        });
+		    	req_data.write(JSON.stringify(sendobj));
+		    	req_data.end();
 			}
 			
-	        node.log('Sending Post ' + JSON.stringify(postopts) + ' DATA : ' + msg.payload);
-	    	var getres = ''
-	    	var req_data = https.request (postopts, function (res_data) {
-
-	        	res_data.on('data', function (chunk) { getres += chunk; });
-	        	res_data.on('end', function () {
-	        		if (res_data.statusCode == 401) {
-	        			
-	        			node.warn ( 'Unauthorized, do a refresh cycle');
-	        			oAuthRefresh(node.salesforce, function() {
-	        				runextract();
-	        			}, function(msg) {
-	        				node.error(msg);
-	
-	        			})
-	
-	        		} else if (res_data.statusCode == 201) {
-		                node.log('success');
-	        		} else {
-	        			node.error("yeah something broke." + res_data.statusCode + ' : ' + getres);
-	        		}
-	          	});
-	        }).on('error', function(e) {
-	        	node.error("Got REST API error: " + e.message);
-	        });
-	    	req_data.write(msg.payload);
-	    	req_data.end();
+			
+			if (Array.isArray(msg.payload)) {
+				for (rec in msg.payload) {
+					
+					var sendobj = msg.payload[rec];
+					//delete sendobj._id;
+					runupload(sendobj);
+				}
+			}
 	         
 	    });
 	}
