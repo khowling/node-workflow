@@ -159,7 +159,7 @@
 
 
     <div class="form-row" id="node-input-interval-row" >
-        <label for="node-input-interval"><i class="icon-time"></i> <span id="node-input-interval-label">for</span></label>
+        <label for="node-input-interval"><i class="icon-time"></i> <span id="node-input-interval-label">Interval (s)</span></label>
         <input type="text" id="node-input-interval" placeholder="Polling Interval (in Seconds)">
     </div>
 
@@ -430,7 +430,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
             upsert_field: {value:"",required:false}
         },
         inputs:1,
-        outputs:0,
+        outputs:1,
         icon: "salesforce.png",
         align: "right",
         label: function() {

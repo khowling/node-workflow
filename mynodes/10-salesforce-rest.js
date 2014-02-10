@@ -201,25 +201,11 @@ function SalesforcePutNode(n) {
     	
     	node.log ('Setting up on-input for :' + credentials.screen_name);
 		node.on("input",function(msg) {
-			console.log ('got : ' + JSON.stringify(msg));
+			node.log ('got msg : ' + JSON.stringify(msg));
 			
-			var runupload = function(sendobj) {
-				console.log ('got sendobj : ' + JSON.stringify(sendobj));
-		        var postopts = {
-		            	hostname: url.parse(credentials.instance_url).hostname,
-		                path: '/services/data/v29.0/sobjects/'+ node.output_sobject + '/',
-		                method: 'POST',
-		                headers:{
-		                	'Content-Type' : 'application/json',
-		                	'Authorization': 'Bearer '+ credentials.access_token
-		                }};
-		        
-				if (node.output_type == 'upsert') {
-					postopts.path = postopts.path + node.upsert_field + '/' + sendobj[node.upsert_field];
-					postopts.method = 'PATCH'; 
-				}
+			/* run upload, allowing for oauth refresh & logic retry */
+			var runupload = function(postopts, sendobj, callback) {
 				
-		        node.log('Sending Post ' + JSON.stringify(postopts) + ' DATA : ' + sendobj);
 		    	var getres = ''
 		    	var req_data = https.request (postopts, function (res_data) {
 	
@@ -229,33 +215,74 @@ function SalesforcePutNode(n) {
 		        			
 		        			node.warn ( 'Unauthorized, do a refresh cycle');
 		        			oAuthRefresh(node.salesforce, function() {
-		        				runupload(sendobj);
+		        				/* re-get the new credentials & re-run */
+		        				credentials = RED.nodes.getCredentials(node.salesforce);
+		        				runupload(postopts, sendobj, callback);
 		        			}, function(msg) {
-		        				node.error(msg);
-		
+		        				callback('oAuthRefresh error : ' + msg);
 		        			})
 		
-		        		} else if (res_data.statusCode == 201) {
-			                node.log('success');
-		        		} else {
-		        			node.error("yeah something broke." + res_data.statusCode + ' : ' + getres);
+		        		} else if (res_data.statusCode == 201 || res_data.statusCode == 204) {
+		        			/* 201 - “Created” success code, for POST request. */
+		        			/* 204 - Upsert Updated an existing record */
+			                node.log('success '+ res_data.statusCode +' : ' + getres);
+			                if (getres) {
+				                var msg = { 
+										 topic:node.output_type+"/"+credentials.screen_name, 
+										 payload:JSON.parse(getres)
+										 };
+									  
+					            node.send(msg);
+			        		}
+			                callback();
+		        		}  else {
+		        			callback("Something broke : " + res_data.statusCode + ' : ' + getres);
 		        		}
 		          	});
 		        }).on('error', function(e) {
-		        	node.error("Got REST API error: " + e.message);
+		        	callback("Got REST API error: " + e.message);
 		        });
 		    	req_data.write(JSON.stringify(sendobj));
 		    	req_data.end();
 			}
 			
+			/** If array of records, ensure we process one at a time **/
+			var asyncloop = function(i) {
+				if (i < msg.payload.length) {
+					var sendobj = msg.payload[i];
+					console.log ('got sendobj : ' + JSON.stringify(sendobj));
+			        var postopts = {
+			            	hostname: url.parse(credentials.instance_url).hostname,
+			                path: '/services/data/v29.0/sobjects/'+ node.output_sobject + '/',
+			                method: 'POST',
+			                headers:{
+			                	'Content-Type' : 'application/json',
+			                	'Authorization': 'Bearer '+ credentials.access_token
+			                }};
+			        
+					if (node.output_type == 'upsert') {
+						postopts.path = postopts.path + node.upsert_field + '/' + sendobj[node.upsert_field];
+						postopts.method = 'PATCH'; 
+						delete sendobj[node.upsert_field];
+					}
+					
+			        node.log('Sending Post ' + JSON.stringify(postopts) + ' DATA : ' + JSON.stringify(sendobj));
+			        
+					runupload(postopts, sendobj, function(e) {
+						if (e) {
+							node.error(e);
+						} else {
+							asyncloop(i+1);	
+						}
+					});
+				}
+			}
 			
 			if (Array.isArray(msg.payload)) {
-				for (rec in msg.payload) {
-					
-					var sendobj = msg.payload[rec];
-					//delete sendobj._id;
-					runupload(sendobj);
-				}
+				asyncloop(0);
+			} else {
+				msg.payload = [msg.payload];
+				asyncloop(0);
 			}
 	         
 	    });
@@ -284,7 +311,7 @@ var credentials = {};
 var oAuthRefresh = function(nodeid, successcallback, errorcallback) {
 	
 	var credentials = RED.nodes.getCredentials(nodeid);
-
+	console.log ('oAuthRefresh nodeid ' + nodeid + ', got credentials : ' + JSON.stringify(credentials));
 	if (credentials.refresh_token != null) {
 		oa.getOAuthAccessToken(
 			credentials.refresh_token,
@@ -293,6 +320,7 @@ var oAuthRefresh = function(nodeid, successcallback, errorcallback) {
 	            if (error){
 	            	errorcallback ("Error with Oauth refresh cycle " + JSON.stringify(error));
 	            } else {
+	            	console.log ('oAuthRefresh success addCredentials for ' + nodeid + ', got token : ' + oauth_access_token);
 	                credentials.access_token = oauth_access_token;
 	            //    RED.nodes.deleteCredentials(nodeid);
 	                RED.nodes.addCredentials(nodeid,credentials);
