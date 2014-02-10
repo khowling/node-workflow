@@ -245,119 +245,138 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
         },
         oneditprepare: function() {
 
-        	var node_credentials = this.salesforce;
+    		var node_credentials = this.salesforce;
+    		var node_sobject = this.sobject;
+    		var node_push_topic = this.push_topic;
 
+            $("#node-input-sobject-row").hide();
+            $("#node-input-interval-row").hide();
+            $("#node-input-sobject-fields-row").hide();
+            $("#node-input-push_topic-row").hide();
+            $("#node-input-sobject-fields-spinner").hide();
+            $("#node-input-sobject-spinner").hide();
+            
         	console.log('salesforce in  ' + this.id  + ', credentials : ' + node_credentials);
         	
-					/* salesforce-credentials Change */
-					$("#node-input-salesforce").change(function() {
-						var new_cred = $("#node-input-salesforce").val();
-						console.log('change : node-input-salesforce: ' + new_cred);
-						if (new_cred != '_ADD_') node_credentials = new_cred;
-					});
-			
-          $("#node-input-sobject-row").hide();
-          $("#node-input-interval-row").hide();
-          $("#node-input-sobject-fields-row").hide();
-          $("#node-input-push_topic-row").hide();
-          $("#node-input-sobject-fields-spinner").hide();
-          $("#node-input-sobject-spinner").hide();
-          
-          $("#node-input-sobject-fields-common").click(function() {
-          		$("#node-input-sobject_fields").val ('Id,Name');
-          })
-          $("#node-input-sobject-fields-all").click(function() {
-          	var selected_sobject = $("#node-input-sobject option:selected").val();
-         		$("#node-input-sobject-fields-spinner").show();
-         		if (node_credentials != null) {
-         			$.getJSON('salesforce/'+node_credentials+'/sobjects/'+selected_sobject,function(data) {
-	            var fields = '', first = true;
-	            if (data) {
-	                for (sobj in data.fields) {
-	                	if (first) { first = false; } else {  fields += ', '; }
-	                	fields += data.fields[sobj].name;
-	                	
-	                }
-	            }
-	            $("#node-input-sobject-fields-spinner").hide();
-	            $("#node-input-sobject_fields").val (fields);
-	        })
-          	} else {
-          		$("#node-input-sobject_fields").val ('Please - Set Salesforce Credentials first');
-          	}
-          })
-          
-
-          $("#node-input-input_type").change(function() {
-            var type = $("#node-input-input_type option:selected").val();
-              
-            console.log('salesforce in  input_type change' + this.id  + ', credentials : ' + node_credentials);
-              
-						$("#node-input-sobject-row").hide();
-						$("#node-input-interval-row").hide();
-						$("#node-input-sobject-fields-row").hide();
-						$("#node-input-push_topic-row").hide();
-						$("#node-input-soql-row").hide();
-						$("#node-input-sobject-fields-spinner").hide();
-						$("#node-input-sobject-spinner").hide();
-
-          	if (type == "soql") {
-          		$("#node-input-soql-row").show();
-          		$("#node-input-interval-row").show();
-            } else if (type == "sobjects") {
-                $("#node-input-sobject-row").show();
-                $("#node-input-interval-row").show();
-                $("#node-input-sobject-fields-row").show();
-                
-                var selected_sobject = $("#node-input-sobject option:selected").val();
-                $("#node-input-sobject").find('option').remove().end();
-                
-                if (node_credentials != null) {
-                	$("#node-input-sobject-spinner").show();
-                	
-                	
-                	$.getJSON('salesforce/'+node_credentials+'/sobjects/all',function(data) {
-	            			if (data) {
+			/**** refresh_sobject_field ****/
+			var refresh_sobject_field = function() {
+				var selected_sobject = $("#node-input-sobject option:selected").val()  || node_sobject;
+				$("#node-input-sobject").find('option').remove().end();
+				
+				if (node_credentials != null) {
+	            	$("#node-input-sobject-spinner").show();
+	            	$.getJSON('salesforce/'+node_credentials+'/sobjects/all',function(data) {
+            			if (data) {
 			                for (sobj in data.sobjects) {
 			                	$('#node-input-sobject')
 						          .append($('<option>', { value : data.sobjects[sobj].name })
-						          .text(data.sobjects[sobj].label)); 
+						          .text(data.sobjects[sobj].name)); 
 			                }
 			                $("#node-input-sobject-spinner").hide();
 			                $("#node-input-sobject").val(selected_sobject);
-				            }
-					       	});
-						    } else {
-						    	$('#node-input-sobject').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
-						    }
-            } else if (type == "StreamingAPI") {
-          		$("#node-input-push_topic-row").show();
-                  
-                  var selected_push_topic = $("#node-input-push_topic option:selected").val();
-                  $("#node-input-push_topic").find('option').remove().end();
-
-                  if (node_credentials != null) {
-                  	$("#node-input-push_topic-spinner").show();
-                  	
-              	    $.getJSON('salesforce/'+node_credentials+'/sobjects/StreamingAPI',function(data) {
-		            if (data) {
-		                for (sobj in data.records) {
-		              
-		                	$('#node-input-push_topic')
+			            }
+			       	});
+				} else {
+					$('#node-input-sobject').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+				}
+			};
+			
+			/**** refresh_sobject_field ****/
+			var refresh_pushtopics = function() {
+				var selected_push_topic = $("#node-input-push_topic option:selected").val() || node_push_topic;
+				$("#node-input-push_topic").find('option').remove().end();
+				
+				if (node_credentials != null) {
+					$("#node-input-push_topic-spinner").show();
+					
+					$.getJSON('salesforce/'+node_credentials+'/sobjects/StreamingAPI',function(data) {
+					if (data) {
+					    for (sobj in data.records) {
+					  
+					    	$('#node-input-push_topic')
 					          .append($('<option>', { value : data.records[sobj].Name })
 					          .text(data.records[sobj].Name)); 
-		                }
-		                $("#node-input-push_topic-spinner").hide();
-		                $("#node-input-push_topic").val(selected_push_topic);
-		            }
-		        });
-		   } else {
-		    	$('#node-input-push_topic').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
-		    }
-              } else {}             
+					    }
+					    $("#node-input-push_topic-spinner").hide();
+					    $("#node-input-push_topic").val(selected_push_topic);
+						    }
+						});
+				} else {
+				    	$('#node-input-push_topic').append($('<option>', { value : '_ERR_' }).text('Please - Set Salesforce Credentials first')); 
+				}
+			};
+            
+            
+			/* salesforce-credentials Change */
+			$("#node-input-salesforce").change(function() {
+				var new_cred = $("#node-input-salesforce").val();
+				console.log('salesforce in, change credentials : ' + new_cred);
+				if (new_cred != '_ADD_') {
+					node_credentials = new_cred;
+					
+				}
+			});
+			
 
-          });
-          $("#node-input-input_type").change();
+          
+			$("#node-input-sobject-fields-common").click(function() {
+				$("#node-input-sobject_fields").val ('Id,Name');
+			  });
+			
+			$("#node-input-sobject-fields-all").click(function() {
+				var selected_sobject = $("#node-input-sobject option:selected").val();
+				$("#node-input-sobject-fields-spinner").show();
+				if (node_credentials != null) {
+					$.getJSON('salesforce/'+node_credentials+'/sobjects/'+selected_sobject,function(data) {
+					    var fields = '', first = true;
+					    if (data) {
+					        for (sobj in data.fields) {
+					        	if (first) { first = false; } else {  fields += ', '; }
+					        	fields += data.fields[sobj].name;
+					        	
+					        }
+					    }
+					    $("#node-input-sobject-fields-spinner").hide();
+					    $("#node-input-sobject_fields").val (fields);
+					})
+				} else {
+					$("#node-input-sobject_fields").val ('Please - Set Salesforce Credentials first');
+			  	}
+			});
+          
+
+			$("#node-input-input_type").change(function() {
+				var type = $("#node-input-input_type option:selected").val();
+				  
+					console.log('salesforce in  input_type change' + this.id  + ', credentials : ' + node_credentials);
+				  
+					$("#node-input-sobject-row").hide();
+				$("#node-input-interval-row").hide();
+				$("#node-input-sobject-fields-row").hide();
+				$("#node-input-push_topic-row").hide();
+				$("#node-input-soql-row").hide();
+				$("#node-input-sobject-fields-spinner").hide();
+				$("#node-input-sobject-spinner").hide();
+				
+				if (type == "soql") {
+					$("#node-input-soql-row").show();
+					$("#node-input-interval-row").show();
+				} else if (type == "sobjects") {
+				    $("#node-input-sobject-row").show();
+				    $("#node-input-interval-row").show();
+				    $("#node-input-sobject-fields-row").show();
+				    
+				    refresh_sobject_field();
+				    
+				} else if (type == "StreamingAPI") {
+					$("#node-input-push_topic-row").show();
+					  
+					refresh_pushtopics();
+				} else {}             
+			});
+			
+			/*** force change on opening dialogue ***/
+			$("#node-input-input_type").change();
       
         }
     });
@@ -422,6 +441,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
         	var node_credentials = this.salesforce;
         	var node_output_sobject = this.output_sobject;
         	var node_output_type = this.output_type;
+        	var node_upsert_field = this.upsert_field
         	
         	$("#node-input-output_sobject-spinner").hide();
         	$("#node-input-upsert_field_row").hide();
@@ -466,7 +486,7 @@ System.debug('Created new PushTopic: '+ pushTopic.Id);
 			    
 		    	/* upsert selected, get the current sboject selected, & clear down any existing externalid values */ 
 		    	var selected_sobject = $("#node-input-output_sobject option:selected").val() || node_output_sobject;
-		    	var selected_upsert_field = $("#node-input-upsert_field option:selected").val();
+		    	var selected_upsert_field = $("#node-input-upsert_field option:selected").val() || node_upsert_field;
 		    	
 		        console.log("refresh_sobject_field for : " + selected_sobject  + ", selected_upsert_field : " + selected_upsert_field);
 
