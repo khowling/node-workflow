@@ -334,7 +334,7 @@ var oAuthRefresh = function(nodeid, successcallback, errorcallback) {
 }
 
 /* Called by 'pollSalesforceCredentials', see if Oauth call back has stored the credentials yet */
-RED.app.get('/salesforce/:id', function(req,res) {
+RED.httpAdmin.get('/salesforce/:id', function(req,res) {
     var credentials = RED.nodes.getCredentials(req.params.id);
     if (credentials) {
         res.send(JSON.stringify({sn:credentials.screen_name}));
@@ -343,12 +343,12 @@ RED.app.get('/salesforce/:id', function(req,res) {
     }
 });
 
-RED.app.delete('/salesforce/:id', function(req,res) {
+RED.httpAdmin.delete('/salesforce/:id', function(req,res) {
     RED.nodes.deleteCredentials(req.params.id);
     res.send(200);
 });
 
-RED.app.get('/salesforce/:id/sobjects/:mode', function(req,res) {
+RED.httpAdmin.get('/salesforce/:id/sobjects/:mode', function(req,res) {
 	var nodeid = req.params.id,
 		mode = 'sobjects' + ((req.params.mode == 'all') ? '' : ('/'+req.params.mode+'/describe'));
 	
@@ -396,7 +396,7 @@ RED.app.get('/salesforce/:id/sobjects/:mode', function(req,res) {
 	 getMetaSObjectDate();
 });
 
-RED.app.post("/salesforce/:id/activate/:state", function(req,res) {
+RED.httpAdmin.post("/salesforce/:id/activate/:state", function(req,res) {
 	var node = RED.nodes.getNode(req.params.id);
 	var state = req.params.state;
 	if (node != null) {
@@ -415,7 +415,7 @@ RED.app.post("/salesforce/:id/activate/:state", function(req,res) {
 });
 
 /* Initiate the Oauth handshake for the "salesforce-credentials" id */
-RED.app.get('/salesforce/:id/auth', function(req, res){
+RED.httpAdmin.get('/salesforce/:id/auth', function(req, res){
 	res.redirect(oa.getAuthorizeUrl({ 
         response_type: 'code', 
         client_id: clientId,
@@ -425,7 +425,7 @@ RED.app.get('/salesforce/:id/auth', function(req, res){
 });
 
 /* salesforce calls the callback with the passed in "salesforce-credentials" id in the 'state' parameter */
-RED.app.get('/salesforce/auth/callback', function(req, res, next){
+RED.httpAdmin.get('/salesforce/auth/callback', function(req, res, next){
 	var salesforce = req.param('state'),
 		code = req.param('code');
 	
